@@ -69,6 +69,18 @@ doca_error_t register_simple_fwd_params(void);
 int simple_fwd_process_pkts(void *process_pkts_params);
 
 /*
+ * Starts NetFlow probe dump worker process and IPC channel.
+ *
+ * @return: 0 on success and non-zero value on failure
+ */
+int simple_fwd_netflow_probe_start(void);
+
+/*
+ * Stops NetFlow probe dump worker process and releases probe resources.
+ */
+void simple_fwd_netflow_probe_stop(void);
+
+/*
  * Stops the application from processing further packets
  */
 void simple_fwd_process_pkts_stop(void);

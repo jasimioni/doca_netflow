@@ -154,17 +154,24 @@ int main(int argc, char **argv)
 		goto exit_app;
 	}
 
+	if (simple_fwd_netflow_probe_start() != 0) {
+		DOCA_LOG_ERR("Failed to start NetFlow probe dump worker");
+		exit_status = EXIT_FAILURE;
+		goto exit_app;
+	}
+
 	simple_fwd_map_queue(dpdk_config.port_config.nb_queues);
 	process_pkts_params.vnf = vnf;
 	rte_eal_mp_remote_launch(simple_fwd_process_pkts, &process_pkts_params, CALL_MAIN);
 	rte_eal_mp_wait_lcore();
-exit_app:
+	simple_fwd_netflow_probe_stop();
+	exit_app:
 	/* cleanup app resources */
 	simple_fwd_destroy(vnf);
 
 	/* DPDK cleanup resources */
 	dpdk_queues_and_ports_fini(&dpdk_config);
-dpdk_destroy:
+	dpdk_destroy:
 	dpdk_fini();
 
 	/* ARGP cleanup */
