@@ -165,13 +165,15 @@ int main(int argc, char **argv)
 	rte_eal_mp_remote_launch(simple_fwd_process_pkts, &process_pkts_params, CALL_MAIN);
 	rte_eal_mp_wait_lcore();
 	simple_fwd_netflow_probe_stop();
-	exit_app:
+
+exit_app:
 	/* cleanup app resources */
 	simple_fwd_destroy(vnf);
 
 	/* DPDK cleanup resources */
 	dpdk_queues_and_ports_fini(&dpdk_config);
-	dpdk_destroy:
+
+dpdk_destroy:
 	dpdk_fini();
 
 	/* ARGP cleanup */

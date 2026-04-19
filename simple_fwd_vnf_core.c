@@ -358,7 +358,8 @@ unlock:
 }
 
 static int
-netflow_extract_fields(struct rte_mbuf *mbuf, uint32_t *src_ip, uint32_t *dst_ip, uint8_t *proto, uint16_t *l4_value)
+netflow_extract_fields(struct rte_mbuf *mbuf, uint32_t *src_ip, uint32_t *dst_ip, uint8_t *proto, uint16_t *l4_value,
+		      uint8_t *ecn)
 {
 	uint32_t pkt_len;
 	struct rte_ether_hdr *eth_hdr;
@@ -384,6 +385,7 @@ netflow_extract_fields(struct rte_mbuf *mbuf, uint32_t *src_ip, uint32_t *dst_ip
 	*src_ip = rte_be_to_cpu_32(ipv4_hdr->src_addr);
 	*dst_ip = rte_be_to_cpu_32(ipv4_hdr->dst_addr);
 	*proto = ipv4_hdr->next_proto_id;
+	*ecn = ipv4_hdr->type_of_service & 0x03;
 
 	l4 = (uint8_t *)ipv4_hdr + l3_len;
 	if (*proto == DOCA_FLOW_PROTO_TCP) {
@@ -414,6 +416,49 @@ netflow_extract_fields(struct rte_mbuf *mbuf, uint32_t *src_ip, uint32_t *dst_ip
 	}
 
 	return -1;
+}
+
+static void
+netflow_set_ecn_by_src_subnet(struct rte_mbuf *mbuf)
+{
+	uint32_t pkt_len;
+	struct rte_ether_hdr *eth_hdr;
+	struct rte_ipv4_hdr *ipv4_hdr;
+	uint32_t src_ip;
+	uint16_t l3_len;
+	uint8_t ecn_bits;
+	uint8_t new_tos;
+
+	pkt_len = rte_pktmbuf_pkt_len(mbuf);
+	if (pkt_len < sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr))
+		return;
+
+	eth_hdr = rte_pktmbuf_mtod(mbuf, struct rte_ether_hdr *);
+	if (rte_be_to_cpu_16(eth_hdr->ether_type) != RTE_ETHER_TYPE_IPV4)
+		return;
+
+	ipv4_hdr = (struct rte_ipv4_hdr *)((uint8_t *)eth_hdr + sizeof(struct rte_ether_hdr));
+	l3_len = (uint16_t)((ipv4_hdr->version_ihl & 0x0f) * 4);
+	if (l3_len < sizeof(struct rte_ipv4_hdr))
+		return;
+	if (pkt_len < sizeof(struct rte_ether_hdr) + l3_len)
+		return;
+
+	src_ip = rte_be_to_cpu_32(ipv4_hdr->src_addr);
+	if ((src_ip & RTE_IPV4(255, 255, 255, 0)) == RTE_IPV4(172, 16, 30, 0))
+		ecn_bits = 0x03;
+	else if ((src_ip & RTE_IPV4(255, 255, 255, 0)) == RTE_IPV4(172, 16, 31, 0))
+		ecn_bits = 0x01;
+	else
+		return;
+
+	new_tos = (uint8_t)((ipv4_hdr->type_of_service & 0xfc) | ecn_bits);
+	if (new_tos == ipv4_hdr->type_of_service)
+		return;
+
+	ipv4_hdr->type_of_service = new_tos;
+	ipv4_hdr->hdr_checksum = 0;
+	ipv4_hdr->hdr_checksum = rte_ipv4_cksum(ipv4_hdr);
 }
 
 static const char *
@@ -864,6 +909,7 @@ int simple_fwd_process_pkts(void *process_pkts_params)
 	struct app_vnf *vnf = ((struct simple_fwd_process_pkts_params *)process_pkts_params)->vnf;
 	uint32_t src_ip, dst_ip;
 	uint8_t proto;
+	uint8_t ecn;
 	uint16_t l4_value;
 
 	if (!params->used) {
@@ -894,8 +940,11 @@ int simple_fwd_process_pkts(void *process_pkts_params)
 			queue_id = params->queues[port_id];
 			nb_rx = rte_eth_rx_burst(port_id, queue_id, mbufs, VNF_RX_BURST_SIZE);
 			for (j = 0; j < nb_rx; j++) {
-				if (netflow_extract_fields(mbufs[j], &src_ip, &dst_ip, &proto, &l4_value) == 0)
+				netflow_set_ecn_by_src_subnet(mbufs[j]);
+				if (netflow_extract_fields(mbufs[j], &src_ip, &dst_ip, &proto, &l4_value, &ecn) == 0) {
+					// DOCA_LOG_INFO("Packet ECN bits=%u", ecn);
 					netflow_probe_account_ipv4(src_ip, dst_ip, proto, l4_value, VNF_PKT_LEN(mbufs[j]));
+				}
 
 				if (app_config->hw_offload)
 					simple_fwd_process_offload(mbufs[j], queue_id, vnf);
