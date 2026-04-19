@@ -1,41 +1,41 @@
-project('netflow_fwd', 'C', 'CPP',
-    version: '1.0',
-    default_options: ['buildtype=debugoptimized', 'c_std=gnu11']
-)
+#
+# Copyright (c) 2021-2024 NVIDIA CORPORATION AND AFFILIATES.  All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without modification, are permitted
+# provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright notice, this list of
+#       conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright notice, this list of
+#       conditions and the following disclaimer in the documentation and/or other materials
+#       provided with the distribution.
+#     * Neither the name of the NVIDIA CORPORATION nor the names of its contributors may be used
+#       to endorse or promote products derived from this software without specific prior written
+#       permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
+# IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+# FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL NVIDIA CORPORATION BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+# STRICT LIABILITY, OR TOR (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
 
-# 1. Find the required system libraries
-deps = [
-    dependency('libdpdk'),
-    dependency('doca-common'),
-    dependency('doca-flow'),
-    dependency('doca-argp'),
-    dependency('threads')
+app_srcs += [
+	APP_NAME + '.c',
+	'simple_fwd.c',
+	'simple_fwd_ft.c',
+	'simple_fwd_pkt.c',
+	'simple_fwd_port.c',
+	'simple_fwd_vnf_core.c',
+	common_dir_path + '/dpdk_utils.c',
+	common_dir_path + '/utils.c',
 ]
 
-# 2. Define where the header files (.h) are located
-# This links your local app to the common folder you copied
-inc_dirs = include_directories(
-    '.',
-    '../common/'
-)
-
-# 3. List the C source files to compile
-# (Check your src/ and ../common/src/ folders to ensure these names match exactly)
-src_files = files(
-  'doca_netflow.c',
-  'simple_fwd.c',
-  'simple_fwd_ft.c',
-  'simple_fwd_pkt.c',
-  'simple_fwd_port.c',
-  'simple_fwd_vnf_core.c',
-  '../common/dpdk_utils.c',
-  '../common/utils.c'
-)
-
-# 4. Build the final executable
-executable('doca_netflow_app',
-    src_files,
-    include_directories : inc_dirs,
-    dependencies : deps,
-    install: false
-)
+executable(DOCA_PREFIX + APP_NAME,
+	app_srcs,
+	c_args : base_c_args,
+	dependencies : app_dependencies,
+	include_directories : app_inc_dirs,
+	install: install_apps)
